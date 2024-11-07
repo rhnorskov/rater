@@ -1,0 +1,16 @@
+<html>
+  <body>
+    <h2>Confirm Change of Email</h2>
+
+    <p>
+      Follow this link to confirm the update of your email from {{ .Email }} to
+      {{ .NewEmail }}:
+    </p>
+    <p>
+      <a
+        href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&redirect_to={{ .RedirectTo }}&type=email_change"
+        >Change Email</a
+      >
+    </p>
+  </body>
+</html>
