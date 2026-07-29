@@ -1,18 +1,20 @@
-// Takes the value, not the name: Next only inlines NEXT_PUBLIC_* on literal
-// static member access, so process.env[name] would be undefined in the browser.
-export function required(name: string, value: string | undefined): string {
-	if (!value) {
-		throw new Error(`Missing environment variable: ${name}`);
-	}
-	return value;
-}
+import { createEnv } from "@t3-oss/env-nextjs";
+import * as z from "zod";
 
-export const SUPABASE_URL = required(
-	"NEXT_PUBLIC_SUPABASE_URL",
-	process.env.NEXT_PUBLIC_SUPABASE_URL,
-);
-
-export const SUPABASE_PUBLISHABLE_KEY = required(
-	"NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
-	process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-);
+export const env = createEnv({
+	// Accessing these from the client throws.
+	server: {
+		SUPABASE_SECRET_KEY: z.string().min(1),
+	},
+	client: {
+		NEXT_PUBLIC_SUPABASE_URL: z.url(),
+		NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
+	},
+	// Next bundles only statically-accessed env vars, so client keys are destructured by hand.
+	experimental__runtimeEnv: {
+		NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+		NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+			process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+	},
+	emptyStringAsUndefined: true,
+});
