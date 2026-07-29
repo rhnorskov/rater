@@ -1,0 +1,20 @@
+# deps
+node_modules
+
+# next
+.next/
+next-env.d.ts
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+.pnpm-debug.log*
+
+# typescript
+*.tsbuildinfo
+
+# env
+.env*
+!.env.example
