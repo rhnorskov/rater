@@ -2,8 +2,6 @@ import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "#/lib/env";
 
-const PUBLIC_PREFIXES = ["/login", "/auth"];
-
 export async function updateSession(request: NextRequest) {
 	let supabaseResponse = NextResponse.next({ request });
 
@@ -28,18 +26,9 @@ export async function updateSession(request: NextRequest) {
 		},
 	});
 
+	// Refreshes an expiring token and writes the new cookies via setAll.
 	// Nothing may await between createServerClient and getClaims, or sessions drop at random.
-	const { data } = await supabase.auth.getClaims();
-	const claims = data?.claims ?? null;
-
-	const isPublic = PUBLIC_PREFIXES.some((prefix) =>
-		request.nextUrl.pathname.startsWith(prefix),
-	);
-	if (!claims && !isPublic) {
-		const url = request.nextUrl.clone();
-		url.pathname = "/login";
-		return NextResponse.redirect(url);
-	}
+	await supabase.auth.getClaims();
 
 	// Return this exact object. Any substitute must carry the cookies over:
 	// other.cookies.setAll(supabaseResponse.cookies.getAll())
