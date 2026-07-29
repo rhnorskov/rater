@@ -10,5 +10,4 @@ export const serverEnv = createEnv({
 		SUPABASE_SECRET_KEY: z.string().min(1),
 	},
 	experimental__runtimeEnv: {},
-	emptyStringAsUndefined: true,
 });
