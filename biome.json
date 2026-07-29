@@ -6,7 +6,7 @@
 		"useIgnoreFile": true
 	},
 	"files": {
-		"includes": ["**", "!vendor/*/dist"]
+		"includes": ["**", "!vendor/*/dist", "!src/lib/supabase/database.types.ts"]
 	},
 	"linter": {
 		"rules": {
