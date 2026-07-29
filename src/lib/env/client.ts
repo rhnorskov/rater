@@ -1,12 +1,9 @@
 import { createEnv } from "@t3-oss/env-nextjs";
-import { PHASE_PRODUCTION_BUILD } from "next/constants";
-import * as z from "zod";
+import { z } from "zod";
 
-export const env = createEnv({
-	// Accessing these from the client throws.
-	server: {
-		SUPABASE_SECRET_KEY: z.string().min(1),
-	},
+// Inlined into the bundle at build time, so a wrong value cannot be corrected at
+// runtime. Always validated, builds included.
+export const clientEnv = createEnv({
 	client: {
 		NEXT_PUBLIC_SUPABASE_URL: z.url(),
 		NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
@@ -18,6 +15,4 @@ export const env = createEnv({
 			process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
 	},
 	emptyStringAsUndefined: true,
-	// Builds run without secrets; validation happens on first evaluation at runtime.
-	skipValidation: process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD,
 });
