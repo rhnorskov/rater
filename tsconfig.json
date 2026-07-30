@@ -2,7 +2,7 @@
 	"$schema": "https://json.schemastore.org/tsconfig",
 	"compilerOptions": {
 		"target": "ES2025",
-		"lib": ["dom", "dom.iterable", "esnext"],
+		"lib": ["dom", "esnext"],
 		"module": "esnext",
 		"moduleResolution": "bundler",
 		"jsx": "react-jsx",
