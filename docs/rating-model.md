@@ -1,0 +1,125 @@
+# Rating model
+
+How a rating is produced. Users never enter a number; they state preferences between
+two items and the number is derived.
+
+## Problem
+
+Absolute ratings are unreliable. People cannot consistently map a film to a point on a
+1–10 scale — the same film gets a different number depending on mood, recency, and what
+they rated last. Relative judgements are easy and stable: *The Shawshank Redemption* is
+better than *The Dark Knight*, and both are far better than *National Treasure*.
+
+Pairwise preference is also what the field converged on for eliciting human judgement —
+preference data for language models is collected as comparisons, not scores, for exactly
+this reason.
+
+## Personal ranking
+
+**Each user has one totally ordered list.** New titles are placed by binary insertion:
+the item is compared against the midpoint of the current list, then recursively against
+the midpoint of the surviving half, until its position is fixed. That is ~log₂(n)
+comparisons — about 10 at a thousand films.
+
+Transitivity holds **by construction**. If A is above B and B is above C, then A is
+above C, without A and C ever being compared. This is the central requirement, and it is
+a property of maintaining a sorted list rather than something the algorithm has to infer.
+
+Order is stored with **LexoRank** keys — inserting between two neighbours rewrites one
+key instead of reindexing the list, and it avoids the precision drift that plain
+fractional indexing accumulates. Keys lengthen on repeated inserts into the same gap, so
+a periodic rebalance job is required.
+
+**The order is the source of truth.** Because transitivity is imposed, every pairwise
+fact about a user's taste is recoverable from their list. A comparison log cannot
+express anything the order does not already encode; its only uses are confidence
+weighting and history, not reconstruction.
+
+Reordering is therefore safe. Any drag produces another valid total order — no
+contradiction is possible, and nothing needs reconciling.
+
+## Personal score
+
+Rank maps to 1–10 through the **inverse normal CDF**, not linearly:
+
+```
+percentile → z-score → clamp ±2σ → scale to 1–10
+```
+
+Linear mapping assumes quality is uniformly spaced across ranks. It isn't — most films
+cluster in the middle, so linear over-separates films 50 and 51 while under-separating
+the top five. With 101 films, adjacent-rank gaps come out at 0.06 near the middle and
+0.24 near the top, which matches how people actually feel about their lists.
+
+**This is presentation, not measurement.** A single user's ordering contains no spacing
+information at all — rank is ordinal. Any mapping is a chosen shape. Two consequences:
+the score shifts as the list grows (a new entry changes the denominator), and the shape
+is imposed rather than observed. Real magnitude comes only from the global model.
+
+## Global ranking
+
+**Batch-fit Bradley–Terry** over the pairwise data implied by every user's order. Each
+film gets one scalar; scalars are totally ordered, so the global ranking is transitive by
+construction too.
+
+Magnitude is recovered from **cross-user disagreement rates**. If 98% of users rank A
+above B, the fitted gap is large; at 55% it is small. Degree of preference therefore
+never has to be asked for — the UI stays a binary, one-second decision, and
+"significantly better" emerges from the aggregate.
+
+Three properties follow:
+
+- **Power users need down-weighting.** A list of *k* films yields *k(k−1)/2* pairs by
+  transitive closure. 100 films is 4,950 pairs against 45 for a 10-film list — 110× the
+  weight for 10× the effort. Unweighted, the global ranking becomes the opinion of a
+  handful of people.
+- **Scores cannot update live.** Refitting is a batch job, so global numbers lag personal
+  ones.
+- **Connectivity is required.** A film only ranks if it is connected to the pool through
+  some chain of comparisons. Isolated titles get a "not enough data" state, never a
+  fabricated score.
+
+## Rejected: Elo
+
+Elo's online update rule is path-dependent — ratings depend on which matchups happened
+in what order, and nothing enforces transitivity. A > B and B > C does not give A > C
+without A and C meeting.
+
+Note this objection applies to the *incremental update rule*, not to latent-score models
+generally. Bradley–Terry, of which Elo is a crude online approximation, is fitted in
+batch over all data at once and produces a single scalar per item, which is inherently
+transitive. That is why it survives here and Elo does not.
+
+## Rejected: seeding magnitude from public ratings
+
+Using IMDb or TMDB scores as a Bayesian prior would solve cold start — sparse films sit
+near their prior, well-compared films are dominated by real data, and the influence
+decays per film with no cutover date.
+
+Rejected because it imports the artefact the product exists to replace. Public averages
+carry review-bombing, recency bias, genre skew, and heavy clustering in 6–8 because
+people won't use the bottom half of the scale. Early rankings would simply look like
+IMDb's — invisible differentiation at exactly the moment it needs to be visible.
+
+Instead: accept that global quality improves with volume, and say so in the UI. Surface
+comparison counts; withhold scores below a threshold.
+
+**A neutral prior is still required.** Unregularised Bradley–Terry diverges to ±∞ for
+undefeated or winless items, so an undefeated obscurity would top the chart on one
+comparison. Shrink toward the population mean via an L2 penalty or virtual win/loss
+pairs. This is numerical stability, not editorial — "we don't know yet" rather than
+"IMDb thinks it's a 7.4".
+
+## Open questions
+
+- **Onboarding.** Binary insertion needs an existing list. The first film has nothing to
+  compare against and the list isn't useful for a dozen or so entries — all cost, no
+  payoff, before any number appears.
+- **Re-comparison.** Insertion never revisits a settled pair, so an early misjudgement is
+  permanent and silently skews everything placed after it. Drag-to-reorder is the repair
+  mechanism, but nothing prompts the user to notice.
+- **Matchup difficulty.** Binary insertion converges on the user's uncertainty, so the
+  game gets harder the longer it is played. Easy comparisons are satisfying but carry no
+  information; some deliberate mixing is likely needed.
+- **Weighting scheme.** Down-weighting power users is necessary; the specific function is
+  undecided.
