@@ -6,7 +6,13 @@
 		"useIgnoreFile": true
 	},
 	"files": {
-		"includes": ["**", "!vendor/*/dist", "!src/lib/supabase/database.types.ts"]
+		"includes": [
+			"**",
+			"!vendor/*/dist",
+			"!src/lib/supabase/database.types.ts",
+			"!.agents",
+			"!skills-lock.json"
+		]
 	},
 	"linter": {
 		"rules": {
@@ -22,6 +28,19 @@
 			}
 		}
 	},
+	"overrides": [
+		{
+			"includes": ["src/components/ui/**"],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"noLabelWithoutControl": "off",
+						"useSemanticElements": "off"
+					}
+				}
+			}
+		}
+	],
 	"assist": {
 		"actions": {
 			"source": {
