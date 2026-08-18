@@ -38,5 +38,8 @@ alter table public.movies enable row level security;
 
 grant select on public.movies to anon, authenticated;
 
+-- Writes require the secret key: RLS bypass and table privileges are separate gates.
+grant select, insert, update, delete on public.movies to service_role;
+
 create policy "movies are readable by everyone" on public.movies
 	for select to anon, authenticated using (true);
