@@ -77,6 +77,9 @@ async function fetchPage(page: number) {
 
 async function main() {
 	const minVotes = Number(process.argv[2] ?? 50);
+
+	console.log(`target: ${env.NEXT_PUBLIC_SUPABASE_URL}`);
+
 	const supabase = createClient(
 		env.NEXT_PUBLIC_SUPABASE_URL,
 		env.SUPABASE_SECRET_KEY,
