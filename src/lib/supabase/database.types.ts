@@ -60,6 +60,35 @@ export type Database = {
         }
         Relationships: []
       }
+      rankings: {
+        Row: {
+          created_at: string
+          movie_id: string
+          rank: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          movie_id: string
+          rank: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          movie_id?: string
+          rank?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rankings_movie_id_fkey"
+            columns: ["movie_id"]
+            isOneToOne: false
+            referencedRelation: "movies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
