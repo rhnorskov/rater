@@ -23,6 +23,7 @@ const discoverResult = z.object({
 	poster_path: z.string().nullish(),
 	backdrop_path: z.string().nullish(),
 	popularity: z.number().nullish(),
+	vote_count: z.number().nullish(),
 });
 
 const discoverPage = z.object({
@@ -51,17 +52,17 @@ function toRow(movie: DiscoverResult) {
 		poster_url: imageUrl(movie.poster_path),
 		backdrop_url: imageUrl(movie.backdrop_path),
 		tmdb_popularity: movie.popularity ?? null,
+		tmdb_vote_count: movie.vote_count ?? null,
 		synced_at: new Date().toISOString(),
 	};
 }
 
 async function fetchPage(page: number) {
 	const url = new URL("https://api.themoviedb.org/3/discover/movie");
-	url.searchParams.set("sort_by", "popularity.desc");
+	// vote_count.desc is strictly monotonic across pages; popularity.desc is not.
+	url.searchParams.set("sort_by", "vote_count.desc");
 	url.searchParams.set("include_adult", "false");
 	url.searchParams.set("page", String(page));
-	// Drops entries with no votes at all. Unlike popularity.gte, TMDB honours this one.
-	url.searchParams.set("vote_count.gte", "1");
 
 	const response = await fetch(url, {
 		headers: { Authorization: `Bearer ${env.TMDB_ACCESS_TOKEN}` },
@@ -75,7 +76,7 @@ async function fetchPage(page: number) {
 }
 
 async function main() {
-	const minPopularity = Number(process.argv[2] ?? 5);
+	const minVotes = Number(process.argv[2] ?? 50);
 	const supabase = createClient(
 		env.NEXT_PUBLIC_SUPABASE_URL,
 		env.SUPABASE_SECRET_KEY,
@@ -93,11 +94,8 @@ async function main() {
 			break;
 		}
 
-		// popularity.desc is only approximately sorted — individual pages carry outliers
-		// well below their neighbours — so keep paging until a whole page is under the
-		// threshold rather than stopping at the first item that is.
 		const wanted = results.filter(
-			(movie) => (movie.popularity ?? 0) >= minPopularity,
+			(movie) => (movie.vote_count ?? 0) >= minVotes,
 		);
 		reachedThreshold = wanted.length === 0;
 
@@ -123,11 +121,11 @@ async function main() {
 		page++;
 	}
 
-	console.log(`done: ${upserted} rows at popularity >= ${minPopularity}`);
+	console.log(`done: ${upserted} rows at vote_count >= ${minVotes}`);
 
 	if (!reachedThreshold) {
 		console.log(
-			`note: stopped at TMDB's ${MAX_PAGE}-page cap (${MAX_PAGE * PAGE_SIZE} titles) before reaching popularity ${minPopularity}. Raise the threshold to cover the catalogue.`,
+			`note: stopped at TMDB's ${MAX_PAGE}-page cap (${MAX_PAGE * PAGE_SIZE} titles) before reaching vote_count ${minVotes}. Paging cannot go deeper; a fuller catalogue needs the daily ID export.`,
 		);
 	}
 }

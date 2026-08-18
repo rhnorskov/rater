@@ -23,6 +23,7 @@ export type Database = {
           title: string
           tmdb_id: number | null
           tmdb_popularity: number | null
+          tmdb_vote_count: number | null
           updated_at: string
         }
         Insert: {
@@ -38,6 +39,7 @@ export type Database = {
           title: string
           tmdb_id?: number | null
           tmdb_popularity?: number | null
+          tmdb_vote_count?: number | null
           updated_at?: string
         }
         Update: {
@@ -53,6 +55,7 @@ export type Database = {
           title?: string
           tmdb_id?: number | null
           tmdb_popularity?: number | null
+          tmdb_vote_count?: number | null
           updated_at?: string
         }
         Relationships: []

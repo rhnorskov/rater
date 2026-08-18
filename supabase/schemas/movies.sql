@@ -9,6 +9,7 @@ create table public.movies (
 	poster_url text,
 	backdrop_url text,
 	tmdb_popularity real,
+	tmdb_vote_count integer,
 	-- Last fetched from the source, whether or not anything changed.
 	synced_at timestamptz not null default now(),
 	-- Last fetch that changed a value; the trigger below leaves it alone otherwise.
@@ -16,7 +17,7 @@ create table public.movies (
 	created_at timestamptz not null default now()
 );
 
-create index movies_tmdb_popularity_idx on public.movies (tmdb_popularity desc nulls last);
+create index movies_tmdb_vote_count_idx on public.movies (tmdb_vote_count desc nulls last);
 
 -- Serves both fuzzy matching (% and <%) and substring matching (ilike).
 create index movies_title_trgm_idx on public.movies using gin (title extensions.gin_trgm_ops);
