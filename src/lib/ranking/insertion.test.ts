@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
 	beginInsertion,
+	boundaryIndex,
 	comparisonIndex,
 	type Insertion,
 	isPlaced,
 	keyForIndex,
 	narrow,
 	placedIndex,
+	remainingComparisons,
 } from "./insertion";
 import { keysBetween } from "./keys";
 
@@ -116,5 +118,77 @@ describe("keyForIndex", () => {
 			keys = [keys[0] as string, inserted, ...keys.slice(1)];
 		}
 		expect([...keys].sort()).toEqual(keys);
+	});
+});
+
+describe("remainingComparisons", () => {
+	it("is zero once placed", () => {
+		expect(remainingComparisons(beginInsertion(0))).toBe(0);
+	});
+
+	it("matches the comparisons placement actually takes", () => {
+		const sorted = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10];
+		const budget = remainingComparisons(beginInsertion(sorted.length));
+
+		for (const value of [105, 95, 55, 15, 5]) {
+			expect(place(sorted, value).comparisons).toBeLessThanOrEqual(budget);
+		}
+	});
+
+	it("falls as the range narrows", () => {
+		let insertion = beginInsertion(100);
+		let previous = remainingComparisons(insertion);
+
+		while (!isPlaced(insertion)) {
+			insertion = narrow(insertion, true);
+			const remaining = remainingComparisons(insertion);
+			expect(remaining).toBeLessThan(previous);
+			previous = remaining;
+		}
+	});
+});
+
+describe("boundaryIndex", () => {
+	const list = ["a", "b", "c"];
+
+	it("places between two neighbours that still touch", () => {
+		expect(boundaryIndex(list, "a", "b")).toBe(1);
+		expect(boundaryIndex(list, "b", "c")).toBe(2);
+	});
+
+	it("places at the ends", () => {
+		expect(boundaryIndex(list, null, "a")).toBe(0);
+		expect(boundaryIndex(list, "c", null)).toBe(3);
+	});
+
+	it("accepts an empty list", () => {
+		expect(boundaryIndex([], null, null)).toBe(0);
+	});
+
+	it("agrees with placement for every gap", () => {
+		for (let index = 0; index <= list.length; index++) {
+			const above = list[index - 1] ?? null;
+			const below = list[index] ?? null;
+			expect(boundaryIndex(list, above, below)).toBe(index);
+		}
+	});
+
+	it("rejects a gap something moved into", () => {
+		expect(boundaryIndex(["a", "x", "b", "c"], "a", "b")).toBeNull();
+	});
+
+	it("rejects a missing neighbour", () => {
+		expect(boundaryIndex(list, "gone", "b")).toBeNull();
+		expect(boundaryIndex(list, "a", "gone")).toBeNull();
+	});
+
+	it("rejects an end that is no longer the end", () => {
+		expect(boundaryIndex(list, null, "b")).toBeNull();
+		expect(boundaryIndex(list, "b", null)).toBeNull();
+	});
+
+	it("tolerates movement outside the gap", () => {
+		// Every answer was "worse than b, better than c", which this order still allows.
+		expect(boundaryIndex(["b", "c", "a"], "b", "c")).toBe(1);
 	});
 });

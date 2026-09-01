@@ -28,6 +28,17 @@ export function comparisonIndex(insertion: Insertion): number | null {
 	return Math.floor((insertion.low + insertion.high) / 2);
 }
 
+/**
+ * Comparisons still needed in the worst case. Shown to the user, so it counts the
+ * remaining candidate positions rather than the items left to compare against.
+ */
+export function remainingComparisons(insertion: Insertion): number {
+	if (isPlaced(insertion)) {
+		return 0;
+	}
+	return Math.ceil(Math.log2(insertion.high - insertion.low + 1));
+}
+
 /** Halves the remaining range using the answer to the comparison at `comparisonIndex`. */
 export function narrow(
 	insertion: Insertion,
@@ -61,4 +72,31 @@ export function keyForIndex(orderedKeys: string[], index: number): string {
 		);
 	}
 	return keyBetween(orderedKeys[index - 1] ?? null, orderedKeys[index] ?? null);
+}
+
+/**
+ * Where a title bounded by `above` and `below` belongs in `orderedIds`, or null if those
+ * two no longer touch. Nulls stand for the ends of the list.
+ *
+ * Comparisons run against a snapshot the client holds, so the list can move underneath
+ * them. Adjacency is the exact condition for the answers to still hold: every one of them
+ * said "worse than `above`, better than `below`", and nothing else was decided. A gap that
+ * closed means some item now claims the position the user chose, and the insertion has to
+ * be replayed against the current list.
+ */
+export function boundaryIndex(
+	orderedIds: readonly string[],
+	above: string | null,
+	below: string | null,
+): number | null {
+	const index = above === null ? 0 : orderedIds.indexOf(above) + 1;
+
+	// indexOf missed, so the item the title was placed under is gone.
+	if (above !== null && index === 0) {
+		return null;
+	}
+	if ((orderedIds[index] ?? null) !== below) {
+		return null;
+	}
+	return index;
 }
