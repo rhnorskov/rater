@@ -80,16 +80,33 @@ async function dealtWith(supabase: Supabase): Promise<Set<string>> {
 
 async function pickCandidate(supabase: Supabase): Promise<Movie | null> {
 	const excluded = await dealtWith(supabase);
-	let pool = POOL;
+
+	// The pool has to be measured before it can be sampled. An offset past the end of the
+	// table is a 416 from PostgREST rather than an empty page, so a catalogue smaller than
+	// the pool would fail every draw instead of falling back to what is there.
+	const { count, error: countError } = await supabase
+		.from("movies")
+		.select("id", { count: "exact", head: true });
+
+	if (countError !== null) {
+		throw new Error(countError.message);
+	}
+
+	const pool = Math.min(POOL, count ?? 0);
+
+	if (pool === 0) {
+		return null;
+	}
 
 	for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
 		// Squaring the draw leans on the most-voted end without ever fixing an order, so a
-		// long session keeps moving instead of walking the same titles again.
+		// long session keeps moving instead of walking the same titles again. Math.random
+		// stays below 1, so the offset stays inside the pool.
 		const offset = Math.floor(pool * Math.random() ** 2);
 
-		const { data, error, count } = await supabase
+		const { data, error } = await supabase
 			.from("movies")
-			.select(MOVIE_COLUMNS, { count: "exact" })
+			.select(MOVIE_COLUMNS)
 			// Vote count alone leaves ties in an undefined order, which paging needs settled.
 			.order("tmdb_vote_count", { ascending: false, nullsFirst: false })
 			.order("id", { ascending: true })
@@ -97,11 +114,6 @@ async function pickCandidate(supabase: Supabase): Promise<Movie | null> {
 
 		if (error !== null) {
 			throw new Error(error.message);
-		}
-
-		// A catalogue smaller than the pool would otherwise keep drawing past the end.
-		if (count !== null) {
-			pool = Math.min(POOL, count);
 		}
 
 		const found = data.find((movie) => !excluded.has(movie.id));
