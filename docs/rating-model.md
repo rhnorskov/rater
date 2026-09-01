@@ -115,6 +115,12 @@ pairs. This is numerical stability, not editorial — "we don't know yet" rather
 - **Onboarding.** Binary insertion needs an existing list. The first film has nothing to
   compare against and the list isn't useful for a dozen or so entries — all cost, no
   payoff, before any number appears.
+
+  Half answered: the bottleneck was recall, not comparison. Asking someone to name the
+  films they have watched is slow and forgetful; showing them a title is neither. So the
+  catalogue is offered instead — drawn from the most-voted end, where a hit is likeliest —
+  and anything unwatched is waved off once and never shown again. What remains open is the
+  payoff: the first dozen entries still produce no number worth showing.
 - **Re-comparison.** Insertion never revisits a settled pair, so an early misjudgement is
   permanent and silently skews everything placed after it. Drag-to-reorder is the repair
   mechanism, but nothing prompts the user to notice.

@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { cn } from "#/lib/utils";
-import type { Movie } from "./queries";
+import type { Movie } from "./movie";
 
 // TMDB posters are 2:3.
 const SIZES = {

@@ -8,8 +8,9 @@ import {
 	CardHeader,
 } from "#/components/ui/card";
 import { cn } from "#/lib/utils";
+import type { Movie } from "./movie";
 import { Poster } from "./poster";
-import type { Movie, RankedMovie } from "./queries";
+import type { RankedMovie } from "./queries";
 
 type Props = {
 	candidate: Movie;

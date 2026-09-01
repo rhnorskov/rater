@@ -12,8 +12,8 @@ import { Field, FieldLabel } from "#/components/ui/field";
 import { Input } from "#/components/ui/input";
 import { Spinner } from "#/components/ui/spinner";
 import { searchMovies } from "./actions";
+import type { Movie } from "./movie";
 import { Poster } from "./poster";
-import type { Movie } from "./queries";
 
 const DEBOUNCE_MS = 250;
 const MIN_QUERY = 2;

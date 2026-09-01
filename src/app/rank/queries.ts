@@ -1,23 +1,9 @@
 import "server-only";
 
 import { createClient } from "#/lib/supabase/server";
-
-export type Movie = {
-	readonly id: string;
-	readonly title: string;
-	readonly year: number | null;
-	readonly posterUrl: string | null;
-};
+import { type Movie, toMovie } from "./movie";
 
 export type RankedMovie = Movie & { readonly rank: string };
-
-function year(releaseDate: string | null): number | null {
-	if (releaseDate === null) {
-		return null;
-	}
-	const parsed = Number(releaseDate.slice(0, 4));
-	return Number.isNaN(parsed) ? null : parsed;
-}
 
 /**
  * The signed-in user's list, best first. RLS narrows this to their own rows, and the
@@ -36,11 +22,5 @@ export async function getRankedList(): Promise<RankedMovie[]> {
 		throw new Error(`could not load the ranked list: ${error.message}`);
 	}
 
-	return data.map((row) => ({
-		id: row.movies.id,
-		title: row.movies.title,
-		year: year(row.movies.release_date),
-		posterUrl: row.movies.poster_url,
-		rank: row.rank,
-	}));
+	return data.map((row) => ({ ...toMovie(row.movies), rank: row.rank }));
 }

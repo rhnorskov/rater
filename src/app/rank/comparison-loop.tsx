@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Alert, AlertDescription } from "#/components/ui/alert";
+import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
 import { Spinner } from "#/components/ui/spinner";
 import {
@@ -17,7 +18,9 @@ import {
 import { placeMovie } from "./actions";
 import { CandidateSearch } from "./candidate-search";
 import { Matchup } from "./matchup";
-import type { Movie, RankedMovie } from "./queries";
+import type { Movie } from "./movie";
+import type { RankedMovie } from "./queries";
+import { SuggestionGame } from "./suggestion-game";
 
 /**
  * One film being placed. The list is captured when the run starts: the answers are
@@ -36,12 +39,16 @@ type Notice = {
 	readonly text: string;
 };
 
+/** Where candidates come from: offered by the game, or recalled and searched for. */
+type Source = "game" | "search";
+
 type Props = {
 	list: readonly RankedMovie[];
 };
 
 export function ComparisonLoop({ list }: Props) {
 	const router = useRouter();
+	const [source, setSource] = useState<Source>("game");
 	const [run, setRun] = useState<Run | null>(null);
 	const [placing, setPlacing] = useState<string | null>(null);
 	const [notice, setNotice] = useState<Notice | null>(null);
@@ -93,18 +100,21 @@ export function ComparisonLoop({ list }: Props) {
 		router.refresh();
 	}
 
-	function start(candidate: Movie) {
-		const insertion = beginInsertion(list.length);
-		setNotice(null);
+	const start = useCallback(
+		(candidate: Movie) => {
+			const insertion = beginInsertion(list.length);
+			setNotice(null);
 
-		if (isPlaced(insertion)) {
-			// An empty list settles a film with no comparisons at all.
-			void commit(candidate, list, insertion);
-			return;
-		}
+			if (isPlaced(insertion)) {
+				// An empty list settles a film with no comparisons at all.
+				void commit(candidate, list, insertion);
+				return;
+			}
 
-		setRun({ candidate, snapshot: list, insertion });
-	}
+			setRun({ candidate, snapshot: list, insertion });
+		},
+		[list],
+	);
 
 	function answer(candidateIsBetter: boolean) {
 		if (run === null || committing.current) {
@@ -159,11 +169,34 @@ export function ComparisonLoop({ list }: Props) {
 				</Alert>
 			)}
 
-			<CandidateSearch
-				rankedIds={rankedIds}
-				listLength={list.length}
-				onPick={start}
-			/>
+			<div className="flex gap-1">
+				<Button
+					size="sm"
+					variant={source === "game" ? "secondary" : "ghost"}
+					aria-pressed={source === "game"}
+					onClick={() => setSource("game")}
+				>
+					Offer me films
+				</Button>
+				<Button
+					size="sm"
+					variant={source === "search" ? "secondary" : "ghost"}
+					aria-pressed={source === "search"}
+					onClick={() => setSource("search")}
+				>
+					Search
+				</Button>
+			</div>
+
+			{source === "game" ? (
+				<SuggestionGame onPick={start} />
+			) : (
+				<CandidateSearch
+					rankedIds={rankedIds}
+					listLength={list.length}
+					onPick={start}
+				/>
+			)}
 		</div>
 	);
 }
