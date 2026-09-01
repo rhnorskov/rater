@@ -89,6 +89,32 @@ export type Database = {
           },
         ]
       }
+      unseen: {
+        Row: {
+          created_at: string
+          movie_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          movie_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          movie_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unseen_movie_id_fkey"
+            columns: ["movie_id"]
+            isOneToOne: false
+            referencedRelation: "movies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
