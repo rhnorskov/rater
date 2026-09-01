@@ -6,8 +6,6 @@ import { boundaryIndex, keyForIndex } from "#/lib/ranking/insertion";
 import { createClient } from "#/lib/supabase/server";
 import { MOVIE_COLUMNS, type Movie, toMovie } from "./movie";
 
-type Supabase = Awaited<ReturnType<typeof createClient>>;
-
 const SEARCH_LIMIT = 24;
 
 // PostgREST reads both % and * as wildcards, and \ as the LIKE escape. Dropping them
@@ -44,105 +42,46 @@ export async function searchMovies(query: string): Promise<Movie[]> {
 	return data.map(toMovie);
 }
 
-// The game draws from the most-voted end of the catalogue: those are the films a user is
-// likeliest to have watched, so fewer offers come back as "haven't seen it".
-const POOL = 1000;
-const PAGE = 50;
-// Every film in a page can be one the user has already dealt with. Redraw rather than
-// widen, and give up before the retries cost more than the offer is worth.
-const ATTEMPTS = 4;
+/**
+ * How many films to hand the client at once. The draw is one round trip either way, so a
+ * batch turns a run of wave-offs from one wait each into one wait per ten.
+ */
+const BATCH = 10;
 
-export type GameStep =
-	| { status: "offer"; movie: Movie }
-	/** Nothing left in the pool the user has not ranked or waved off. */
-	| { status: "exhausted" }
-	| { status: "error"; message: string };
+export type CandidateBatch =
+	/** Empty means the pool is used up: everything is ranked or waved off. */
+	{ status: "offers"; movies: Movie[] } | { status: "error"; message: string };
 
-/** Films already ranked or already waved off, neither of which may be offered again. */
-async function dealtWith(supabase: Supabase): Promise<Set<string>> {
-	// RLS scopes both to the signed-in user. Reading the ids whole is fine at the scale of
-	// one person's list; past a few thousand this belongs in SQL as a `not exists` on the
-	// pool query instead of a set held in memory.
-	const [ranked, unseen] = await Promise.all([
-		supabase.from("rankings").select("movie_id"),
-		supabase.from("unseen").select("movie_id"),
-	]);
-
-	if (ranked.error !== null) {
-		throw new Error(ranked.error.message);
-	}
-	if (unseen.error !== null) {
-		throw new Error(unseen.error.message);
-	}
-
-	return new Set([...ranked.data, ...unseen.data].map((row) => row.movie_id));
-}
-
-async function pickCandidate(supabase: Supabase): Promise<Movie | null> {
-	const excluded = await dealtWith(supabase);
-
-	// The pool has to be measured before it can be sampled. An offset past the end of the
-	// table is a 416 from PostgREST rather than an empty page, so a catalogue smaller than
-	// the pool would fail every draw instead of falling back to what is there.
-	const { count, error: countError } = await supabase
-		.from("movies")
-		.select("id", { count: "exact", head: true });
-
-	if (countError !== null) {
-		throw new Error(countError.message);
-	}
-
-	const pool = Math.min(POOL, count ?? 0);
-
-	if (pool === 0) {
-		return null;
-	}
-
-	for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-		// Squaring the draw leans on the most-voted end without ever fixing an order, so a
-		// long session keeps moving instead of walking the same titles again. Math.random
-		// stays below 1, so the offset stays inside the pool.
-		const offset = Math.floor(pool * Math.random() ** 2);
-
-		const { data, error } = await supabase
-			.from("movies")
-			.select(MOVIE_COLUMNS)
-			// Vote count alone leaves ties in an undefined order, which paging needs settled.
-			.order("tmdb_vote_count", { ascending: false, nullsFirst: false })
-			.order("id", { ascending: true })
-			.range(offset, offset + PAGE - 1);
+/**
+ * Films to offer, chosen for the user rather than recalled by them. The exclusions, the
+ * pool size and the pick all happen inside next_candidates, so this is a single request.
+ */
+export async function nextCandidates(size = BATCH): Promise<CandidateBatch> {
+	try {
+		const supabase = await createClient();
+		const { data, error } = await supabase.rpc("next_candidates", {
+			sample_size: size,
+		});
 
 		if (error !== null) {
-			throw new Error(error.message);
+			return { status: "error", message: error.message };
 		}
 
-		const found = data.find((movie) => !excluded.has(movie.id));
-
-		if (found !== undefined) {
-			return toMovie(found);
-		}
-	}
-
-	return null;
-}
-
-/** A film to offer, chosen for the user rather than recalled by them. */
-export async function nextCandidate(): Promise<GameStep> {
-	try {
-		const movie = await pickCandidate(await createClient());
-		return movie === null
-			? { status: "exhausted" }
-			: { status: "offer", movie };
+		return { status: "offers", movies: data.map(toMovie) };
 	} catch (error) {
 		return { status: "error", message: asMessage(error) };
 	}
 }
 
+export type UnseenResult =
+	| { status: "ok" }
+	| { status: "error"; message: string };
+
 /**
- * Records that the user has not watched `movieId` and offers the next film. Persisted
- * rather than held for the session: the point of the game is not being asked again.
+ * Records that the user has not watched `movieId`. Persisted rather than held for the
+ * session: the point of the game is not being asked again.
  */
-export async function markUnseen(movieId: string): Promise<GameStep> {
+export async function markUnseen(movieId: string): Promise<UnseenResult> {
 	const parsed = z.uuid().safeParse(movieId);
 
 	if (!parsed.success) {
@@ -169,14 +108,9 @@ export async function markUnseen(movieId: string): Promise<GameStep> {
 				{ onConflict: "user_id,movie_id", ignoreDuplicates: true },
 			);
 
-		if (error !== null) {
-			return { status: "error", message: error.message };
-		}
-
-		const movie = await pickCandidate(supabase);
-		return movie === null
-			? { status: "exhausted" }
-			: { status: "offer", movie };
+		return error === null
+			? { status: "ok" }
+			: { status: "error", message: error.message };
 	} catch (error) {
 		return { status: "error", message: asMessage(error) };
 	}

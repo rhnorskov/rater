@@ -120,7 +120,31 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      next_candidates: {
+        Args: { sample_size?: number }
+        Returns: {
+          backdrop_url: string | null
+          created_at: string
+          id: string
+          imdb_id: string | null
+          original_title: string | null
+          overview: string | null
+          poster_url: string | null
+          release_date: string | null
+          synced_at: string
+          title: string
+          tmdb_id: number | null
+          tmdb_popularity: number | null
+          tmdb_vote_count: number | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "movies"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
     }
     Enums: {
       [_ in never]: never

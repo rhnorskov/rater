@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "#/components/ui/button";
 import {
 	Card,
@@ -10,9 +10,12 @@ import {
 	CardTitle,
 } from "#/components/ui/card";
 import { Spinner } from "#/components/ui/spinner";
-import { type GameStep, markUnseen, nextCandidate } from "./actions";
+import { markUnseen, nextCandidates } from "./actions";
 import type { Movie } from "./movie";
 import { Poster } from "./poster";
+
+/** Refill before the queue runs dry, so the wait never lands on a keystroke. */
+const REFILL_AT = 3;
 
 type Props = {
 	onPick: (movie: Movie) => void;
@@ -22,49 +25,91 @@ type Props = {
  * Offers films instead of asking the user to recall them. Remembering what you have
  * watched is the slow part — recognising a title you are shown is not — so the pool comes
  * to the user and anything unwatched is waved off in one keystroke.
+ *
+ * Offers are queued and answers are optimistic: waving a film off advances immediately and
+ * records in the background. A round trip per film is what made this feel slow, and none
+ * of them has to be waited on.
  */
 export function SuggestionGame({ onPick }: Props) {
-	const [step, setStep] = useState<GameStep | null>(null);
-	const [busy, setBusy] = useState(false);
+	const [queue, setQueue] = useState<Movie[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [drained, setDrained] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	// Films answered in this session. A refill can outrun the writes that exclude them.
+	const handled = useRef(new Set<string>());
+	const refilling = useRef(false);
 
-	const load = useCallback(() => {
-		setStep(null);
-		nextCandidate()
-			.then(setStep)
-			.catch(() => {
-				setStep({ status: "error", message: "Could not reach the catalogue." });
-			});
+	const refill = useCallback(async () => {
+		if (refilling.current) {
+			return;
+		}
+		refilling.current = true;
+
+		const batch = await nextCandidates();
+
+		refilling.current = false;
+		setLoading(false);
+
+		if (batch.status === "error") {
+			setError(batch.message);
+			return;
+		}
+
+		const fresh = batch.movies.filter(
+			(movie) => !handled.current.has(movie.id),
+		);
+		setDrained(fresh.length === 0);
+		setQueue((previous) => {
+			const known = new Set(previous.map((movie) => movie.id));
+			return [...previous, ...fresh.filter((movie) => !known.has(movie.id))];
+		});
 	}, []);
 
-	useEffect(load, [load]);
+	useEffect(() => {
+		if (queue.length <= REFILL_AT && !drained && error === null) {
+			void refill();
+		}
+	}, [queue.length, drained, error, refill]);
 
-	const movie = step?.status === "offer" ? step.movie : null;
+	const current = queue[0];
+
+	const advance = useCallback((movie: Movie) => {
+		handled.current.add(movie.id);
+		setQueue((previous) => previous.slice(1));
+	}, []);
 
 	const wave = useCallback(() => {
-		if (movie === null || busy) {
+		if (current === undefined) {
 			return;
 		}
 
-		setBusy(true);
-		markUnseen(movie.id)
-			.then(setStep)
-			.catch(() => {
-				setStep({ status: "error", message: "Could not save that." });
-			})
-			.finally(() => setBusy(false));
-	}, [busy, movie]);
+		advance(current);
+
+		// Nothing waits on this: the answer is already reflected and a failure only means
+		// the film can come round again.
+		void markUnseen(current.id).then((result) => {
+			if (result.status === "error") {
+				setError(result.message);
+			}
+		});
+	}, [advance, current]);
+
+	const pick = useCallback(() => {
+		if (current === undefined) {
+			return;
+		}
+		advance(current);
+		onPick(current);
+	}, [advance, current, onPick]);
 
 	useEffect(() => {
-		if (movie === null) {
+		if (current === undefined) {
 			return;
 		}
-
-		// Narrowing does not follow a captured variable into the handler.
-		const offered = movie;
 
 		function onKeyDown(event: KeyboardEvent) {
 			if (event.key === "Enter" || event.key === "y") {
-				onPick(offered);
+				pick();
 			} else if (event.key === "n" || event.key === "ArrowRight") {
 				wave();
 			} else {
@@ -75,44 +120,46 @@ export function SuggestionGame({ onPick }: Props) {
 
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [movie, onPick, wave]);
+	}, [current, pick, wave]);
 
-	if (step === null) {
-		return (
-			<Card className="w-full max-w-2xl">
-				<CardContent className="flex items-center gap-2 text-muted-foreground text-sm">
-					<Spinner /> Finding a film
-				</CardContent>
-			</Card>
-		);
-	}
-
-	if (step.status === "exhausted") {
-		return (
-			<Card className="w-full max-w-2xl">
-				<CardHeader>
-					<CardTitle>Nothing left to offer</CardTitle>
-					<CardDescription>
-						Everything in the pool is either on your list or waved off. Search
-						for a title instead.
-					</CardDescription>
-				</CardHeader>
-			</Card>
-		);
-	}
-
-	if (step.status === "error") {
+	if (error !== null) {
 		return (
 			<Card className="w-full max-w-2xl">
 				<CardHeader>
 					<CardTitle>Could not pick a film</CardTitle>
-					<CardDescription>{step.message}</CardDescription>
+					<CardDescription>{error}</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<Button variant="outline" onClick={load}>
+					<Button
+						variant="outline"
+						onClick={() => {
+							setError(null);
+							setLoading(true);
+						}}
+					>
 						Try again
 					</Button>
 				</CardContent>
+			</Card>
+		);
+	}
+
+	if (current === undefined) {
+		return (
+			<Card className="w-full max-w-2xl">
+				{loading ? (
+					<CardContent className="flex items-center gap-2 text-muted-foreground text-sm">
+						<Spinner /> Finding a film
+					</CardContent>
+				) : (
+					<CardHeader>
+						<CardTitle>Nothing left to offer</CardTitle>
+						<CardDescription>
+							Everything in the pool is either on your list or waved off. Search
+							for a title instead.
+						</CardDescription>
+					</CardHeader>
+				)}
 			</Card>
 		);
 	}
@@ -126,20 +173,17 @@ export function SuggestionGame({ onPick }: Props) {
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="flex items-center gap-4">
-				<Poster movie={step.movie} size="md" />
+				<Poster movie={current} size="md" />
 				<div className="min-w-0 flex-1 space-y-3">
 					<div>
-						<p className="truncate font-medium">{step.movie.title}</p>
+						<p className="truncate font-medium">{current.title}</p>
 						<p className="text-muted-foreground text-xs">
-							{step.movie.year ?? "Unknown year"}
+							{current.year ?? "Unknown year"}
 						</p>
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
-						<Button disabled={busy} onClick={() => onPick(step.movie)}>
-							Seen it — rank it
-						</Button>
-						<Button variant="outline" disabled={busy} onClick={wave}>
-							{busy ? <Spinner data-icon="inline-start" /> : null}
+						<Button onClick={pick}>Seen it — rank it</Button>
+						<Button variant="outline" onClick={wave}>
 							Haven't seen it
 						</Button>
 						<span className="text-muted-foreground text-xs">enter / n</span>
