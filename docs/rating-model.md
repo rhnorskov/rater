@@ -25,6 +25,19 @@ Transitivity holds **by construction**. If A is above B and B is above C, then A
 above C, without A and C ever being compared. This is the central requirement, and it is
 a property of maintaining a sorted list rather than something the algorithm has to infer.
 
+**What a placement establishes is narrower than it looks.** The candidate is always
+compared against both films it ends up between — that falls out of the search and holds for
+every list size and every landing position — so a placement is exact with respect to its
+immediate neighbours. Everything else is inference: five answers place a film in a list of
+forty, which leaves thirty-five films ordered against it without ever being compared.
+
+So a placement that feels wrong is almost never a placement error. Either the neighbours it
+landed between are themselves mis-ordered from an earlier insertion, in which case the
+error was inherited rather than introduced, or the answer given was a coin-flip. Binary
+insertion converges on exactly the comparisons the user is least sure about, so the last
+answer of every run is the least reliable one. Asking more questions cannot help: the range
+narrows to a single position, and there is no residual uncertainty left to spend them on.
+
 Order is stored with **LexoRank** keys — inserting between two neighbours rewrites one
 key instead of reindexing the list, and it avoids the precision drift that plain
 fractional indexing accumulates. Keys lengthen on repeated inserts into the same gap, so

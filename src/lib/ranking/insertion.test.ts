@@ -245,3 +245,149 @@ describe("moving a film already on the list", () => {
 		expect(boundariesFor(ids, 1, 2)).toEqual({ above: "c", below: "d" });
 	});
 });
+
+describe("a consistent user's list comes out sorted", () => {
+	/** Deterministic, so a failure is reproducible. */
+	function prng(seed: number) {
+		let state = seed;
+		return () => {
+			state = (state * 1103515245 + 12345) & 0x7fffffff;
+			return state / 0x7fffffff;
+		};
+	}
+
+	function shuffle<T>(items: readonly T[], random: () => number): T[] {
+		const copy = [...items];
+		for (let i = copy.length - 1; i > 0; i--) {
+			const j = Math.floor(random() * (i + 1));
+			[copy[i], copy[j]] = [copy[j] as T, copy[i] as T];
+		}
+		return copy;
+	}
+
+	/**
+	 * Places every film one at a time, answering each comparison from a fixed internal
+	 * ranking. Reads the result back by key order, the way the database returns it, so this
+	 * covers insertion, key generation and key sorting together.
+	 */
+	function place(trueOrder: readonly string[], random: () => number) {
+		const rankOf = new Map(trueOrder.map((id, index) => [id, index]));
+		const rows: { id: string; key: string }[] = [];
+		let comparisons = 0;
+
+		for (const film of shuffle(trueOrder, random)) {
+			let insertion = beginInsertion(rows.length);
+
+			while (!isPlaced(insertion)) {
+				const index = comparisonIndex(insertion);
+				if (index === null) {
+					throw new Error("unreachable: not placed but no comparison");
+				}
+				const opponent = rows[index]?.id;
+				if (opponent === undefined) {
+					throw new Error(`comparison index ${index} out of range`);
+				}
+				const better = (rankOf.get(film) ?? 0) < (rankOf.get(opponent) ?? 0);
+				insertion = narrow(insertion, better);
+				comparisons++;
+			}
+
+			const at = placedIndex(insertion);
+			rows.splice(at, 0, {
+				id: film,
+				key: keyForIndex(
+					rows.map((row) => row.key),
+					at,
+				),
+			});
+		}
+
+		const byKey = [...rows].sort((a, b) =>
+			a.key < b.key ? -1 : a.key > b.key ? 1 : 0,
+		);
+
+		return { order: byKey.map((row) => row.id), comparisons };
+	}
+
+	for (const size of [1, 2, 3, 5, 8, 13, 25, 50, 120]) {
+		it(`reproduces a ${size}-film ranking from any insertion order`, () => {
+			const trueOrder = Array.from(
+				{ length: size },
+				(_, index) => `f${String(index).padStart(3, "0")}`,
+			);
+
+			for (let seed = 1; seed <= 25; seed++) {
+				const { order } = place(trueOrder, prng(seed * 7919));
+				expect(order, `seed ${seed}`).toEqual(trueOrder);
+			}
+		});
+	}
+
+	it("stays within the comparison budget over a whole list", () => {
+		const trueOrder = Array.from({ length: 100 }, (_, i) => `f${i}`);
+		const { comparisons } = place(trueOrder, prng(1));
+
+		// Each insert costs at most ceil(log2(size + 1)) for the list as it stood.
+		let budget = 0;
+		for (let size = 0; size < trueOrder.length; size++) {
+			budget += Math.ceil(Math.log2(size + 1));
+		}
+
+		expect(comparisons).toBeLessThanOrEqual(budget);
+	});
+});
+
+describe("what a placement actually establishes", () => {
+	/** Records which indices the candidate was compared against on the way to its spot. */
+	function probe(listLength: number, decide: (index: number) => boolean) {
+		const compared: number[] = [];
+		let insertion = beginInsertion(listLength);
+
+		while (!isPlaced(insertion)) {
+			const index = comparisonIndex(insertion);
+			if (index === null) {
+				throw new Error("unreachable");
+			}
+			compared.push(index);
+			insertion = narrow(insertion, decide(index));
+		}
+
+		return { compared, at: placedIndex(insertion) };
+	}
+
+	it("always compares against both immediate neighbours of the final spot", () => {
+		// Every list size, and every position the candidate could land in.
+		for (let length = 1; length <= 40; length++) {
+			for (let target = 0; target <= length; target++) {
+				// A consistent user: the candidate beats everything from `target` onwards.
+				const { compared, at } = probe(length, (index) => index >= target);
+
+				expect(at).toBe(target);
+
+				// The film above it, unless it landed at the top.
+				if (target > 0) {
+					expect(compared, `length ${length}, target ${target}`).toContain(
+						target - 1,
+					);
+				}
+				// The film below it, unless it landed at the bottom.
+				if (target < length) {
+					expect(compared, `length ${length}, target ${target}`).toContain(
+						target,
+					);
+				}
+			}
+		}
+	});
+
+	it("leaves everything else to transitivity", () => {
+		const { compared } = probe(40, (index) => index >= 20);
+
+		// Five answers into a 40-film list. Two of them are the neighbours it lands
+		// between; the other 35 films are positioned relative to it without ever being
+		// compared against it.
+		expect(compared).toEqual([20, 10, 15, 18, 19]);
+		expect(compared).toContain(19);
+		expect(compared).toContain(20);
+	});
+});
