@@ -196,3 +196,90 @@ export async function placeMovie(
 
 	return { status: "placed", position: index + 1, listLength: rows.length + 1 };
 }
+
+export type MoveResult =
+	| { status: "moved"; position: number }
+	/** Already where it was asked to go, so nothing was written. */
+	| { status: "unchanged" }
+	/** The list moved underneath the request; the neighbours no longer touch. */
+	| { status: "stale" }
+	| { status: "error"; message: string };
+
+/**
+ * Moves a film already on the list to sit between `above` and `below`. One row is
+ * rewritten: the order is the source of truth and any total order is valid, so a move
+ * needs no reconciling — see docs/rating-model.md.
+ *
+ * The boundaries are resolved against the list with the film taken out, since it cannot be
+ * its own neighbour.
+ */
+export async function moveRanking(input: PlacementInput): Promise<MoveResult> {
+	const parsed = placement.safeParse(input);
+
+	if (!parsed.success) {
+		return { status: "error", message: "That film could not be identified." };
+	}
+
+	const supabase = await createClient();
+	const { data: claims } = await supabase.auth.getClaims();
+	const userId = claims?.claims.sub;
+
+	if (userId === undefined) {
+		return { status: "error", message: "Your session expired. Sign in again." };
+	}
+
+	const { data: rows, error: readError } = await supabase
+		.from("rankings")
+		.select("movie_id, rank")
+		.order("rank", { ascending: true });
+
+	if (readError !== null) {
+		return { status: "error", message: readError.message };
+	}
+
+	const from = rows.findIndex((row) => row.movie_id === parsed.data.movieId);
+
+	if (from === -1) {
+		return { status: "error", message: "That film is not on your list." };
+	}
+
+	const without = rows.filter((row) => row.movie_id !== parsed.data.movieId);
+	const index = boundaryIndex(
+		without.map((row) => row.movie_id),
+		parsed.data.above,
+		parsed.data.below,
+	);
+
+	if (index === null) {
+		return { status: "stale" };
+	}
+
+	// Landing back in its own gap would rewrite the key for no reason, and keys lengthen
+	// every time they are regenerated in place.
+	if (index === from) {
+		return { status: "unchanged" };
+	}
+
+	const { error: updateError } = await supabase
+		.from("rankings")
+		.update({
+			rank: keyForIndex(
+				without.map((row) => row.rank),
+				index,
+			),
+		})
+		// movie_id alone is not unique across users; the policy scopes this too, but a
+		// write this destructive should not depend only on RLS being right.
+		.eq("user_id", userId)
+		.eq("movie_id", parsed.data.movieId);
+
+	if (updateError !== null) {
+		return updateError.code === "23505"
+			? { status: "stale" }
+			: { status: "error", message: updateError.message };
+	}
+
+	revalidatePath("/rank");
+
+	return { status: "moved", position: index + 1 };
+}
