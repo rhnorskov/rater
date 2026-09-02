@@ -100,3 +100,21 @@ export function boundaryIndex(
 	}
 	return index;
 }
+
+/**
+ * The neighbours a film at `from` would sit between if it moved to `to`, as indices into
+ * the list. The film comes out first: it cannot be its own neighbour, and every position
+ * after it shifts up by one once it is gone.
+ *
+ * Both ends of a move are computed here so the client and the server agree on what a
+ * position means — see `boundaryIndex`, which resolves these back.
+ */
+export function moveBoundaries(
+	orderedIds: readonly string[],
+	from: number,
+	to: number,
+): { above: string | null; below: string | null } {
+	const without = orderedIds.filter((_, index) => index !== from);
+
+	return { above: without[to - 1] ?? null, below: without[to] ?? null };
+}

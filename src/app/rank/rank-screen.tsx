@@ -19,6 +19,7 @@ import { moveRanking, placeMovie } from "./actions";
 import { CandidateSearch } from "./candidate-search";
 import { Matchup } from "./matchup";
 import type { Movie } from "./movie";
+import { PlacementReview } from "./placement-review";
 import type { RankedMovie } from "./queries";
 import { RankedList } from "./ranked-list";
 import { SuggestionGame } from "./suggestion-game";
@@ -58,6 +59,8 @@ export function RankScreen({ list }: Props) {
 	const [run, setRun] = useState<Run | null>(null);
 	const [working, setWorking] = useState<string | null>(null);
 	const [notice, setNotice] = useState<Notice | null>(null);
+	// The film last placed or moved, offered for a second look while it is still fresh.
+	const [review, setReview] = useState<Movie | null>(null);
 	// Two answers can land before React re-renders — a fast double tap on the last
 	// comparison. Both would see the same run and both would write it.
 	const committing = useRef(false);
@@ -89,16 +92,9 @@ export function RankScreen({ list }: Props) {
 			setWorking(null);
 			committing.current = false;
 
-			if (result.status === "placed") {
-				setNotice({
-					tone: "ok",
-					text: `${run.candidate.title} went in at #${result.position} of ${result.listLength}.`,
-				});
-			} else if (result.status === "moved") {
-				setNotice({
-					tone: "ok",
-					text: `${run.candidate.title} moved to #${result.position}.`,
-				});
+			if (result.status === "placed" || result.status === "moved") {
+				setNotice(null);
+				setReview(run.candidate);
 			} else if (result.status === "unchanged") {
 				setNotice({
 					tone: "ok",
@@ -123,6 +119,7 @@ export function RankScreen({ list }: Props) {
 		(candidate: Movie) => {
 			const insertion = beginInsertion(list.length);
 			setNotice(null);
+			setReview(null);
 
 			if (isPlaced(insertion)) {
 				// An empty list settles a film with no comparisons at all.
@@ -143,6 +140,7 @@ export function RankScreen({ list }: Props) {
 			const snapshot = list.filter((other) => other.id !== movie.id);
 			const insertion = beginInsertion(snapshot.length);
 			setNotice(null);
+			setReview(null);
 
 			if (isPlaced(insertion)) {
 				setNotice({
@@ -197,6 +195,14 @@ export function RankScreen({ list }: Props) {
 				/>
 			) : (
 				<div className="flex flex-col gap-3">
+					{review === null ? null : (
+						<PlacementReview
+							movie={review}
+							list={list}
+							onDismiss={() => setReview(null)}
+						/>
+					)}
+
 					{notice === null ? null : notice.tone === "ok" ? (
 						<p className="text-muted-foreground text-sm">{notice.text}</p>
 					) : (

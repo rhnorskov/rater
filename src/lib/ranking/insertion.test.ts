@@ -6,6 +6,7 @@ import {
 	type Insertion,
 	isPlaced,
 	keyForIndex,
+	moveBoundaries,
 	narrow,
 	placedIndex,
 	remainingComparisons,
@@ -194,21 +195,12 @@ describe("boundaryIndex", () => {
 });
 
 describe("moving a film already on the list", () => {
-	/**
-	 * What the client sends: the film comes out of the list, and the neighbours either side
-	 * of its destination are read from what is left.
-	 */
-	function boundariesFor(ids: string[], from: number, to: number) {
-		const without = ids.filter((_, index) => index !== from);
-		return { above: without[to - 1] ?? null, below: without[to] ?? null };
-	}
-
 	const ids = ["a", "b", "c", "d", "e"];
 
 	it("resolves back to the position the client asked for", () => {
 		for (let from = 0; from < ids.length; from++) {
 			for (let to = 0; to < ids.length; to++) {
-				const { above, below } = boundariesFor(ids, from, to);
+				const { above, below } = moveBoundaries(ids, from, to);
 				const without = ids.filter((_, index) => index !== from);
 
 				expect(boundaryIndex(without, above, below)).toBe(to);
@@ -235,14 +227,14 @@ describe("moving a film already on the list", () => {
 
 	it("moves the top film to the bottom and back", () => {
 		const last = ids.length - 1;
-		expect(boundariesFor(ids, 0, last)).toEqual({ above: "e", below: null });
-		expect(boundariesFor(ids, last, 0)).toEqual({ above: null, below: "a" });
+		expect(moveBoundaries(ids, 0, last)).toEqual({ above: "e", below: null });
+		expect(moveBoundaries(ids, last, 0)).toEqual({ above: null, below: "a" });
 	});
 
 	it("nudges one place without naming the film itself", () => {
 		// b moving up sits between nothing and a; the film is never its own neighbour.
-		expect(boundariesFor(ids, 1, 0)).toEqual({ above: null, below: "a" });
-		expect(boundariesFor(ids, 1, 2)).toEqual({ above: "c", below: "d" });
+		expect(moveBoundaries(ids, 1, 0)).toEqual({ above: null, below: "a" });
+		expect(moveBoundaries(ids, 1, 2)).toEqual({ above: "c", below: "d" });
 	});
 });
 

@@ -142,8 +142,14 @@ pairs. This is numerical stability, not editorial — "we don't know yet" rather
   something a hundred places. Both rewrite one key, and any resulting order is valid, so
   neither can contradict anything.
 
-  What remains open is that nothing *prompts* it. The user has to already suspect a film
-  sits wrong, and an early misjudgement is precisely the kind one forgets making.
+  Repair is now prompted, too: a placement is followed by its two neighbours and a nudge,
+  which is the one moment the user can still recognise a bad answer. It sits beside the
+  next offer rather than in front of it — a confirmation step on every placement would cost
+  more than the errors it catches.
+
+  What remains open is the error this cannot reach. A film placed correctly against
+  neighbours that are themselves mis-ordered looks right at every step, and only a
+  comparison it was never asked for would reveal it.
 - **Matchup difficulty.** Binary insertion converges on the user's uncertainty, so the
   game gets harder the longer it is played. Easy comparisons are satisfying but carry no
   information; some deliberate mixing is likely needed.

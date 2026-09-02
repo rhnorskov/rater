@@ -18,6 +18,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "#/components/ui/card";
+import { moveBoundaries } from "#/lib/ranking/insertion";
 import { cn } from "#/lib/utils";
 import { moveRanking, removeRanking, restoreRanking } from "./actions";
 import { Poster } from "./poster";
@@ -99,20 +100,17 @@ export function RankedList({ list, onReplace, disabled }: Props) {
 				return;
 			}
 
-			// The film cannot be its own neighbour, so the boundaries come from the list
-			// with it taken out — the same shape the server resolves against.
+			const { above, below } = moveBoundaries(
+				items.map((movie) => movie.id),
+				from,
+				to,
+			);
 			const without = items.filter((_, index) => index !== from);
-			const above = without[to - 1] ?? null;
-			const below = without[to] ?? null;
 
 			setItems([...without.slice(0, to), moved, ...without.slice(to)]);
 			setNotice(null);
 
-			const result = await moveRanking({
-				movieId: moved.id,
-				above: above?.id ?? null,
-				below: below?.id ?? null,
-			});
+			const result = await moveRanking({ movieId: moved.id, above, below });
 
 			if (result.status === "error") {
 				setItems(list);
