@@ -14,6 +14,8 @@ import type { RankedMovie } from "./queries";
 
 type Props = {
 	candidate: Movie;
+	/** What the candidate is: newly arriving, or already on the list and moving. */
+	candidateLabel: string;
 	opponent: RankedMovie;
 	/** 1-based position of the opponent, so the user can see where they are probing. */
 	opponentPosition: number;
@@ -24,6 +26,7 @@ type Props = {
 
 export function Matchup({
 	candidate,
+	candidateLabel,
 	opponent,
 	opponentPosition,
 	listLength,
@@ -60,7 +63,7 @@ export function Matchup({
 				    the film being placed is the one the user has to keep in mind. */}
 				<Choice
 					movie={candidate}
-					label="New"
+					label={candidateLabel}
 					hint="←"
 					onSelect={() => onAnswer(true)}
 				/>

@@ -122,8 +122,15 @@ pairs. This is numerical stability, not editorial — "we don't know yet" rather
   and anything unwatched is waved off once and never shown again. What remains open is the
   payoff: the first dozen entries still produce no number worth showing.
 - **Re-comparison.** Insertion never revisits a settled pair, so an early misjudgement is
-  permanent and silently skews everything placed after it. Drag-to-reorder is the repair
-  mechanism, but nothing prompts the user to notice.
+  permanent and silently skews everything placed after it.
+
+  Repair exists in two forms: dragging a row, which suits a nudge of a place or two, and
+  re-placing a film by comparison, which is ~log₂(n) answers and the only sane way to move
+  something a hundred places. Both rewrite one key, and any resulting order is valid, so
+  neither can contradict anything.
+
+  What remains open is that nothing *prompts* it. The user has to already suspect a film
+  sits wrong, and an early misjudgement is precisely the kind one forgets making.
 - **Matchup difficulty.** Binary insertion converges on the user's uncertainty, so the
   game gets harder the longer it is played. Easy comparisons are satisfying but carry no
   information; some deliberate mixing is likely needed.

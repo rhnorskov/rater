@@ -1,3 +1,16 @@
+"use client";
+
+import { GitCompareArrows, GripVertical } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+	type KeyboardEvent,
+	type PointerEvent,
+	useCallback,
+	useRef,
+	useState,
+} from "react";
+import { Alert, AlertDescription } from "#/components/ui/alert";
+import { Button } from "#/components/ui/button";
 import {
 	Card,
 	CardContent,
@@ -5,15 +18,166 @@ import {
 	CardHeader,
 	CardTitle,
 } from "#/components/ui/card";
+import { cn } from "#/lib/utils";
+import { moveRanking } from "./actions";
 import { Poster } from "./poster";
 import type { RankedMovie } from "./queries";
 
-type Props = {
-	list: readonly RankedMovie[];
+/** A drag in progress. `target` is where the row would land if released now. */
+type Drag = {
+	readonly index: number;
+	readonly target: number;
+	readonly startY: number;
+	readonly offset: number;
+	readonly rowHeight: number;
 };
 
-export function RankedList({ list }: Props) {
-	if (list.length === 0) {
+type Props = {
+	list: readonly RankedMovie[];
+	/** Re-place a film by comparison, for moves too long to drag. */
+	onReplace: (movie: RankedMovie) => void;
+	disabled: boolean;
+};
+
+function signatureOf(list: readonly RankedMovie[]): string {
+	return list.map((movie) => `${movie.id}:${movie.rank}`).join("|");
+}
+
+/** How far a row is displaced while a drag is in flight. */
+function shiftFor(drag: Drag | null, index: number): number {
+	if (drag === null) {
+		return 0;
+	}
+	if (index === drag.index) {
+		return drag.offset;
+	}
+	// Rows between the row's old and new home slide one place to open the gap.
+	if (drag.index < drag.target && index > drag.index && index <= drag.target) {
+		return -drag.rowHeight;
+	}
+	if (drag.target < drag.index && index >= drag.target && index < drag.index) {
+		return drag.rowHeight;
+	}
+	return 0;
+}
+
+export function RankedList({ list, onReplace, disabled }: Props) {
+	const router = useRouter();
+	const [items, setItems] = useState<readonly RankedMovie[]>(list);
+	const [syncedTo, setSyncedTo] = useState(() => signatureOf(list));
+	const [drag, setDrag] = useState<Drag | null>(null);
+	const [notice, setNotice] = useState<string | null>(null);
+	const listRef = useRef<HTMLOListElement>(null);
+
+	// The list is server state, and a placement elsewhere on the page replaces it. Ranks
+	// are part of the signature so a move landing from another tab re-syncs too.
+	const signature = signatureOf(list);
+	if (signature !== syncedTo) {
+		setSyncedTo(signature);
+		setItems(list);
+		setDrag(null);
+	}
+
+	const commitMove = useCallback(
+		async (from: number, to: number) => {
+			const moved = items[from];
+
+			if (moved === undefined || to === from || to < 0 || to >= items.length) {
+				return;
+			}
+
+			// The film cannot be its own neighbour, so the boundaries come from the list
+			// with it taken out — the same shape the server resolves against.
+			const without = items.filter((_, index) => index !== from);
+			const above = without[to - 1] ?? null;
+			const below = without[to] ?? null;
+
+			setItems([...without.slice(0, to), moved, ...without.slice(to)]);
+			setNotice(null);
+
+			const result = await moveRanking({
+				movieId: moved.id,
+				above: above?.id ?? null,
+				below: below?.id ?? null,
+			});
+
+			if (result.status === "error") {
+				setItems(list);
+				setNotice(result.message);
+				return;
+			}
+
+			if (result.status === "stale") {
+				setItems(list);
+				setNotice(
+					"Your list changed somewhere else, so that move no longer fits it.",
+				);
+				return;
+			}
+
+			// Placed or already there: the order shown is right, but the keys are not.
+			router.refresh();
+		},
+		[items, list, router],
+	);
+
+	function onPointerDown(
+		event: PointerEvent<HTMLButtonElement>,
+		index: number,
+	) {
+		const row = listRef.current?.children[index];
+
+		if (disabled || row === undefined) {
+			return;
+		}
+
+		// Claims the pointer so the move and release land here even outside the grip.
+		event.currentTarget.setPointerCapture(event.pointerId);
+		setDrag({
+			index,
+			target: index,
+			startY: event.clientY,
+			offset: 0,
+			rowHeight: row.getBoundingClientRect().height,
+		});
+	}
+
+	function onPointerMove(event: PointerEvent<HTMLButtonElement>) {
+		if (drag === null) {
+			return;
+		}
+
+		const offset = event.clientY - drag.startY;
+		const steps = Math.round(offset / drag.rowHeight);
+		const target = Math.min(Math.max(drag.index + steps, 0), items.length - 1);
+
+		setDrag({ ...drag, offset, target });
+	}
+
+	function onPointerUp() {
+		if (drag === null) {
+			return;
+		}
+
+		const { index, target } = drag;
+		setDrag(null);
+		void commitMove(index, target);
+	}
+
+	function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+		if (disabled) {
+			return;
+		}
+		if (event.key === "ArrowUp") {
+			event.preventDefault();
+			void commitMove(index, index - 1);
+		} else if (event.key === "ArrowDown") {
+			event.preventDefault();
+			void commitMove(index, index + 1);
+		}
+	}
+
+	if (items.length === 0) {
 		return null;
 	}
 
@@ -22,15 +186,44 @@ export function RankedList({ list }: Props) {
 			<CardHeader>
 				<CardTitle>Your list</CardTitle>
 				<CardDescription>
-					{list.length} {list.length === 1 ? "film" : "films"}, best first.
-					Positions only — a rank this short carries no spacing to turn into a
-					score.
+					{items.length} {items.length === 1 ? "film" : "films"}, best first.
+					Drag to nudge one a place or two; compare to move it further.
 				</CardDescription>
 			</CardHeader>
-			<CardContent>
-				<ol className="divide-y divide-border">
-					{list.map((movie, index) => (
-						<li key={movie.id} className="flex items-center gap-3 py-2">
+			<CardContent className="flex flex-col gap-3">
+				{notice === null ? null : (
+					<Alert variant="destructive">
+						<AlertDescription>{notice}</AlertDescription>
+					</Alert>
+				)}
+
+				<ol ref={listRef} className="flex flex-col">
+					{items.map((movie, index) => (
+						<li
+							key={movie.id}
+							style={{ transform: `translateY(${shiftFor(drag, index)}px)` }}
+							className={cn(
+								"flex items-center gap-3 border-border border-b py-2 last:border-b-0",
+								drag?.index === index
+									? "relative z-10 rounded-md bg-card shadow-lg"
+									: "transition-transform",
+							)}
+						>
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								disabled={disabled}
+								aria-label={`Move ${movie.title}. Drag, or use the arrow keys.`}
+								className="touch-none text-muted-foreground"
+								onPointerDown={(event) => onPointerDown(event, index)}
+								onPointerMove={onPointerMove}
+								onPointerUp={onPointerUp}
+								onPointerCancel={onPointerUp}
+								onKeyDown={(event) => onKeyDown(event, index)}
+							>
+								<GripVertical />
+							</Button>
+
 							<span className="w-6 text-right text-muted-foreground text-xs tabular-nums">
 								{index + 1}
 							</span>
@@ -43,6 +236,17 @@ export function RankedList({ list }: Props) {
 									{movie.year ?? "Unknown year"}
 								</span>
 							</span>
+
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								disabled={disabled}
+								aria-label={`Compare ${movie.title} again to move it`}
+								className="text-muted-foreground"
+								onClick={() => onReplace(movie)}
+							>
+								<GitCompareArrows />
+							</Button>
 						</li>
 					))}
 				</ol>
