@@ -20,6 +20,8 @@
 		"db:types": "supabase gen types --local --schema public > src/lib/supabase/database.types.ts",
 		"db:seed": "node --env-file=.env.development --env-file=.env.local scripts/seed-movies.ts",
 		"db:seed:prod": "node --env-file=.env.local --env-file=.env.production.local scripts/seed-movies.ts",
+		"fit:global": "node --env-file=.env.development --env-file=.env.local scripts/fit-global.ts",
+		"fit:global:prod": "node --env-file=.env.local --env-file=.env.production.local scripts/fit-global.ts",
 		"test": "vitest run",
 		"test:watch": "vitest"
 	},

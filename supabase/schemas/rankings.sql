@@ -17,6 +17,11 @@ alter table public.rankings enable row level security;
 
 grant select, insert, update, delete on public.rankings to authenticated;
 
+-- The global fit has to read every user's order, which RLS deliberately hides from the
+-- app. Read only: a list is written by its owner and by nothing else. RLS bypass and table
+-- privileges are separate gates, so this grant is required on top of the secret key.
+grant select on public.rankings to service_role;
+
 create policy "own rankings are readable" on public.rankings
 	for select to authenticated using ((select auth.uid()) = user_id);
 

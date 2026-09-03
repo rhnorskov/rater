@@ -9,6 +9,41 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      global_scores: {
+        Row: {
+          connected: boolean
+          fitted_at: string
+          movie_id: string
+          raters: number
+          strength: number
+          weight: number
+        }
+        Insert: {
+          connected: boolean
+          fitted_at?: string
+          movie_id: string
+          raters: number
+          strength: number
+          weight: number
+        }
+        Update: {
+          connected?: boolean
+          fitted_at?: string
+          movie_id?: string
+          raters?: number
+          strength?: number
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "global_scores_movie_id_fkey"
+            columns: ["movie_id"]
+            isOneToOne: true
+            referencedRelation: "movies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       movies: {
         Row: {
           backdrop_url: string | null

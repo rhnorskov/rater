@@ -11,6 +11,9 @@
 		"esModuleInterop": true,
 		"isolatedModules": true,
 		"resolveJsonModule": true,
+		// Scripts run straight through node, which resolves TS imports only with the
+		// extension spelled out. Safe here because nothing is emitted.
+		"allowImportingTsExtensions": true,
 		"paths": { "#/*": ["./src/*"] },
 
 		"noEmit": true,

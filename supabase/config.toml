@@ -69,6 +69,7 @@ schema_paths = [
   "./schemas/rankings.sql",
   "./schemas/unseen.sql",
   "./schemas/candidates.sql",
+  "./schemas/global_scores.sql",
 ]
 
 [db.seed]
