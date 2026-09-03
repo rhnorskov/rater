@@ -86,6 +86,11 @@ Three properties follow:
   transitive closure. 100 films is 4,950 pairs against 45 for a 10-film list — 110× the
   weight for 10× the effort. Unweighted, the global ranking becomes the opinion of a
   handful of people.
+
+  Settled: each pair carries **2/(k−1)**, so a user's total weight is *k* — linear in what
+  they actually did. It falls out of this that every list contributes weight 2 to each film
+  on it whatever its length, so the evidence behind two films is comparable no matter who
+  ranked them.
 - **Scores cannot update live.** Refitting is a batch job, so global numbers lag personal
   ones.
 - **Connectivity is required.** A film only ranks if it is connected to the pool through
@@ -123,6 +128,20 @@ comparison. Shrink toward the population mean via an L2 penalty or virtual win/l
 pairs. This is numerical stability, not editorial — "we don't know yet" rather than
 "IMDb thinks it's a 7.4".
 
+Implemented as half a virtual win and half a virtual loss against a reference of strength
+1, which keeps the MM update closed-form. **Do not reach for a heavier prior to tidy up
+the top of the list.** Thinly-rated films crowd the extremes because they have the most
+variance, which reads like a fault and is not one: measured against a known ranking,
+raising the prior from 0.5 to 8 *lowered* recovery from 0.959 to 0.942 and cost precision
+at the top, while barely changing how thin that top was. The lever is withholding, not
+shrinking.
+
+**The fit recovers what it should.** Simulated raters drawn from a hidden ranking that none
+of them perceives exactly, ordered at Spearman 0.95 against that hidden truth, rising with
+the number of lists a film appears on. Worth re-running whenever the weighting or the prior
+is touched, because both are the kind of choice that looks fine and quietly degrades the
+answer.
+
 ## Open questions
 
 - **Onboarding.** Binary insertion needs an existing list. The first film has nothing to
@@ -153,5 +172,9 @@ pairs. This is numerical stability, not editorial — "we don't know yet" rather
 - **Matchup difficulty.** Binary insertion converges on the user's uncertainty, so the
   game gets harder the longer it is played. Easy comparisons are satisfying but carry no
   information; some deliberate mixing is likely needed.
-- **Weighting scheme.** Down-weighting power users is necessary; the specific function is
-  undecided.
+- **Publication threshold.** A film needs at least two lists before a score means
+  anything, since one rater contains no disagreement to measure. Two is a floor rather
+  than a considered number, and it should rise as the number of raters does — the question
+  is what it should be a function of.
+- **Refit cadence.** Nothing triggers the fit yet; it is run by hand. It also refits
+  everything every time, which is fine at this size and will not stay fine.

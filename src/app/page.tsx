@@ -12,9 +12,14 @@ export default async function HomePage() {
 			<p className="text-muted-foreground text-sm">
 				Signed in as {data?.claims.email}
 			</p>
-			<Link href="/rank" className={buttonVariants()}>
-				Rank films
-			</Link>
+			<div className="flex gap-2">
+				<Link href="/rank" className={buttonVariants()}>
+					Rank films
+				</Link>
+				<Link href="/global" className={buttonVariants({ variant: "outline" })}>
+					Global list
+				</Link>
+			</div>
 			<form action={signOut}>
 				<Button type="submit" variant="outline">
 					Sign out
