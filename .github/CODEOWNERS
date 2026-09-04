@@ -1,0 +1,6 @@
+# Every change needs the repository owner's review.
+#
+# On its own this only makes GitHub request the review automatically when a pull request
+# opens. Making it blocking needs branch protection with "require review from Code Owners",
+# which GitHub gates behind Pro for private repositories.
+* @rhnorskov
